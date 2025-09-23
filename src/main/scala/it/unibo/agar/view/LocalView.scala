@@ -1,11 +1,11 @@
 package it.unibo.agar.view
 
-import it.unibo.agar.model.MockGameStateManager
+import it.unibo.agar.model.GameStateManager
 
 import java.awt.Graphics2D
 import scala.swing.*
 
-class LocalView(manager: MockGameStateManager, playerId: String) extends MainFrame:
+class LocalView(manager: GameStateManager, playerId: String) extends MainFrame:
 
   title = s"Agar.io - Local View ($playerId)"
   preferredSize = new Dimension(400, 400)

@@ -1,12 +1,12 @@
 package it.unibo.agar.view
 
-import it.unibo.agar.model.MockGameStateManager
+import it.unibo.agar.model.GameStateManager
 
 import java.awt.Color
 import java.awt.Graphics2D
 import scala.swing.*
 
-class GlobalView(manager: MockGameStateManager) extends MainFrame:
+class GlobalView(manager: GameStateManager) extends MainFrame:
 
   title = "Agar.io - Global View"
   preferredSize = new Dimension(800, 800)
