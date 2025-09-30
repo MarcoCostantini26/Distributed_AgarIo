@@ -35,6 +35,12 @@ object DistributedMain extends SimpleSwingApplication:
   // Create distributed game state manager
   private val distributedManager = new DistributedGameStateManager(system)(system)
 
+  // Create the FoodManager actor (spawn automatic food)
+  private val foodManager = system.systemActorOf(
+    FoodManagerActor(system, width, height),
+    "food-manager"
+  )
+
   // Set up timer for game ticks
   private val timer = new Timer()
   private val task: TimerTask = new TimerTask:
@@ -90,6 +96,12 @@ object DistributedGameGuardian:
           gameWorldSingleton ! Tick
 
       timer.scheduleAtFixedRate(task, 0, 30)
+
+      // Create the FoodManager actor (spawn automatic food)
+      val foodManager = context.spawn(
+        FoodManagerActor(gameWorldSingleton, width, height),
+        "food-manager"
+      )
 
       running(gameWorldSingleton)
     }
