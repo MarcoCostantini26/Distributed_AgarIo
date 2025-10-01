@@ -165,7 +165,9 @@ private def gameWorld(
 **Caratteristiche:**
 - **Stateful**: mantiene lo stato completo del gioco
 - **Single-threaded**: processa un messaggio alla volta (garanzia del modello ad attori)
-- **Idempotente**: le operazioni sono ripetibili senza effetti collaterali
+- **Deterministic**: dato lo stesso input produce sempre lo stesso output
+
+**Nota importante:** La variabile `registeredPlayers` è presente nel codice ma **non viene attualmente utilizzata** per broadcasting. I client fanno polling attivo dello stato tramite `GetWorld`.
 
 ### 3.3 PlayerActor
 
@@ -193,6 +195,12 @@ inactive -> (JoinGame) -> active -> (LeaveGame) -> inactive
                               ↓
                           (Stopped)
 ```
+
+**⚠️ IMPORTANTE:** Nell'implementazione corrente in `DistributedMain`, il `PlayerActor` **esiste ma non viene utilizzato**. L'oggetto `DistributedGameGuardian` contiene la logica per gestire i `PlayerActor`, ma il main crea direttamente le `LocalView` senza passare attraverso questi attori. Questa è un'architettura **ibrida** dove:
+- Il codice per `PlayerActor` è completo e funzionale
+- Ma il main bypassa questo layer e fa comunicare le View direttamente con `DistributedGameStateManager`
+
+Questo suggerisce che il progetto è in una fase di transizione o che esistano due modalità di utilizzo (una più semplice per testing locale, una più completa per deployment distribuito reale).
 
 ### 3.4 FoodManagerActor
 
@@ -452,13 +460,11 @@ LocalView (Swing UI)
     │
     ├──► view.reactions += { case MouseMoved => ... }
     │
-    ├──► playerActor ! MouseMoved(x, y)
+    ├──► Calcola dx, dy (direzione normalizzata)
     │
-PlayerActor
+    ├──► manager.movePlayerDirection(playerId, dx, dy)
     │
-    │ case MouseMoved(mouseX, mouseY) =>
-    │
-    ├──► Calcola dx, dy (direzione)
+DistributedGameStateManager
     │
     ├──► gameWorldActor ! MovePlayer(playerId, dx, dy)
     │
@@ -468,6 +474,8 @@ GameWorldActor
     │
     └──► directions.updated(id, (dx, dy))
 ```
+
+**Nota:** Nell'implementazione attuale, `PlayerActor` esiste ma **non viene utilizzato** nel flusso principale. Le `LocalView` comunicano direttamente con il `GameWorldActor` tramite `DistributedGameStateManager`.
 
 **Repaint Loop:**
 
@@ -617,19 +625,34 @@ cluster.split-brain-resolver {
 ### 7.1 Obiettivi Raggiunti
 
 ✅ **Distributed Player Management:**
-- Giocatori possono join/leave dinamicamente
-- PlayerActor gestisce ciclo di vita
+- `GameWorldActor` gestisce join/leave dinamicamente tramite `PlayerJoined`/`PlayerLeft`
+- Infrastruttura per `PlayerActor` implementata (ma non utilizzata nel main attuale)
 
 ✅ **Distributed Food Management:**
-- Cibo rimosso su tutti i nodi quando mangiato
-- FoodManagerActor genera cibo distribuito
+- Cibo gestito centralmente dal singleton `GameWorldActor`
+- `FoodManagerActor` genera cibo periodicamente ogni 2 secondi
+- Rimozione cibo sincronizzata tramite `RemoveFood` message
 
 ✅ **Consistent World View:**
-- GameWorldActor singleton garantisce consistenza
-- GetWorld fornisce stato aggiornato
+- `GameWorldActor` singleton garantisce **single source of truth**
+- `GetWorld` fornisce stato consistente via ask pattern
+- Polling attivo dalle Views garantisce aggiornamenti
 
 ✅ **Distributed Game End:**
-- CheckGameEnd verifica condizione di vittoria (massa >= 1000)
+- `CheckGameEnd` verifica condizione di vittoria (massa >= 1000)
+- Messaggio `GameEnded` notifica il vincitore
+
+### 7.1.1 Obiettivi Parzialmente Raggiunti
+
+⚠️ **Player Actor Integration:**
+- `PlayerActor` implementato ma **non usato** in `DistributedMain`
+- Views comunicano direttamente con `DistributedGameStateManager`
+- Architettura ibrida: codice pronto per distribuzione ma esecuzione semplificata
+
+⚠️ **Broadcasting Updates:**
+- `registeredPlayers` presente in `GameWorldActor` ma non utilizzato
+- Nessun push di `WorldStateUpdate` ai client
+- Client fanno **polling attivo** invece di ricevere notifiche push
 
 ### 7.2 Punti di Forza
 

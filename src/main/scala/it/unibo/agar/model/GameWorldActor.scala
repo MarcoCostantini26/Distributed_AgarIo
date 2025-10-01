@@ -33,7 +33,10 @@ object GameWorldActor:
 
         case Tick =>
           val updatedWorld = processTick(world, directions)
-          // Note: Broadcasting removed for simplicity, will add back later
+          // Broadcast world state to all registered players
+          registeredPlayers.foreach { playerRef =>
+            playerRef ! WorldStateUpdate(updatedWorld)
+          }
           gameWorld(updatedWorld, directions, registeredPlayers)
 
         case PlayerJoined(id, x, y, mass) =>
@@ -69,9 +72,11 @@ object GameWorldActor:
           gameWorld(world, directions, registeredPlayers + playerNode)
 
         case UnregisterPlayer(playerId) =>
-          // Note: We can't easily remove specific player nodes without additional tracking
-          // For now, we'll handle this in a future iteration
+          // Remove player from registered set
+          // Note: We need to track playerId -> ActorRef mapping
           context.log.info(s"Unregistered player node for $playerId")
+          // For now we don't remove from set as we don't have the mapping
+          // In production, use Map[String, ActorRef[GameMessage]] instead
           Behaviors.same
 
         case WorldStateUpdate(_) =>

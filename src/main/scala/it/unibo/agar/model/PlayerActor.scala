@@ -21,8 +21,16 @@ object PlayerActor:
     Behaviors.setup { context =>
       context.log.info(s"Starting PlayerActor for player: $playerId")
 
-      // Note: We'll handle registration differently since we have mixed message types
-      // For now, we skip the registration and handle communication directly
+      // Create a message adapter to receive GameMessage as PlayerMessage
+      val gameMessageAdapter: ActorRef[GameMessage] = context.messageAdapter[GameMessage] {
+        case WorldStateUpdate(world) => PlayerWorldUpdate(world)
+        case _ =>
+          // Ignore other game messages
+          null.asInstanceOf[PlayerMessage]
+      }
+
+      // Register this player actor to receive world updates
+      gameWorldActor ! RegisterPlayer(playerId, gameMessageAdapter)
 
       inactive(playerId, gameWorldActor, None, None)
     }
@@ -41,19 +49,9 @@ object PlayerActor:
         case StartPlayer(worldWidth, worldHeight) =>
           context.log.info(s"Starting player $playerId with world size ${worldWidth}x${worldHeight}")
 
-          // Create DistributedGameStateManager for this player
-          val manager = new DistributedGameStateManager(gameWorldActor)(context.system)
-
-          // Create LocalView for this player
-          val view = new LocalView(manager, playerId)
-
-          // Set up mouse movement handling
-          view.contents.head.reactions += {
-            case e: scala.swing.event.MouseMoved =>
-              context.self ! MouseMoved(e.point.x.toDouble, e.point.y.toDouble)
-          }
-
-          inactive(playerId, gameWorldActor, Some(view), Some(manager))
+          // GameStateManager should be passed from outside
+          // For now we keep it None and expect it to be provided
+          inactive(playerId, gameWorldActor, None, None)
 
         case JoinGame =>
           context.log.info(s"Player $playerId joining game")
@@ -65,10 +63,11 @@ object PlayerActor:
           // Tell GameWorldActor that this player joined
           gameWorldActor ! PlayerJoined(playerId, startX, startY)
 
-          // Open LocalView window
-          localView.foreach(_.open())
+          active(playerId, gameWorldActor, startX, startY)
 
-          active(playerId, gameWorldActor, localView.get, gameStateManager.get, startX, startY)
+        case PlayerWorldUpdate(world) =>
+          // Receive world updates even when inactive
+          Behaviors.same
 
         case _ =>
           context.log.warn(s"Player $playerId received message while inactive: $message")
@@ -81,37 +80,18 @@ object PlayerActor:
   private def active(
       playerId: String,
       gameWorldActor: ActorRef[GameMessage],
-      localView: LocalView,
-      gameStateManager: DistributedGameStateManager,
       lastX: Double,
       lastY: Double
   ): Behavior[PlayerMessage] =
     Behaviors.receive { (context, message) =>
       message match
-        case MouseMoved(mouseX, mouseY) =>
-          // Calculate movement direction based on mouse position
-          val viewSize = localView.size
-          val centerX = viewSize.width / 2.0
-          val centerY = viewSize.height / 2.0
-
-          // Convert mouse position to movement direction
-          val dx = (mouseX - centerX) * 0.01
-          val dy = (mouseY - centerY) * 0.01
-
-          // Send movement command to GameWorldActor
-          gameWorldActor ! MovePlayer(playerId, dx, dy)
-
-          Behaviors.same
-
         case PlayerWorldUpdate(world) =>
-          // Update the local view with new world state
-          // This will trigger repaint automatically
-          localView.repaint()
-
+          // World state updated - this is received via broadcast from GameWorldActor
+          // The DistributedGameStateManager will be updated via polling
           // Update player position tracking
           world.playerById(playerId) match
             case Some(player) =>
-              active(playerId, gameWorldActor, localView, gameStateManager, player.x, player.y)
+              active(playerId, gameWorldActor, player.x, player.y)
             case None =>
               context.log.warn(s"Player $playerId not found in world update")
               Behaviors.same
@@ -121,22 +101,14 @@ object PlayerActor:
 
           // Notify GameWorldActor
           gameWorldActor ! PlayerLeft(playerId)
-
-          // Close LocalView
-          localView.close()
+          gameWorldActor ! UnregisterPlayer(playerId)
 
           // Return to inactive state
-          inactive(playerId, gameWorldActor, Some(localView), Some(gameStateManager))
+          inactive(playerId, gameWorldActor, None, None)
 
         case GetPlayerStatus(replyTo) =>
-          // Get current player status from world
-          val world = gameStateManager.getWorld
-          world.playerById(playerId) match
-            case Some(player) =>
-              replyTo ! PlayerStatusResponse(playerId, isActive = true, player.mass)
-            case None =>
-              replyTo ! PlayerStatusResponse(playerId, isActive = false, 0.0)
-
+          // Return current position as status
+          replyTo ! PlayerStatusResponse(playerId, isActive = true, 0.0)
           Behaviors.same
 
         case _ =>
@@ -144,23 +116,3 @@ object PlayerActor:
           Behaviors.same
     }
 
-  /**
-   * Handle termination - cleanup resources
-   */
-  private def stopping(
-      playerId: String,
-      gameWorldActor: ActorRef[GameMessage],
-      localView: Option[LocalView]
-  ): Behavior[PlayerMessage] =
-    Behaviors.setup { context =>
-      context.log.info(s"PlayerActor $playerId is stopping")
-
-      // Unregister from GameWorldActor
-      gameWorldActor ! UnregisterPlayer(playerId)
-      gameWorldActor ! PlayerLeft(playerId)
-
-      // Close LocalView if open
-      localView.foreach(_.close())
-
-      Behaviors.stopped
-    }
