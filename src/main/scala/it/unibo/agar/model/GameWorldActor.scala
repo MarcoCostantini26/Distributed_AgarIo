@@ -42,7 +42,11 @@ object GameWorldActor:
         case PlayerJoined(id, x, y, mass) =>
           val newPlayer = Player(id, x, y, mass)
           val updatedWorld = world.copy(players = world.players :+ newPlayer)
-          context.log.info(s"Player $id joined at ($x, $y) with mass $mass")
+          context.log.info(s"✅ Player $id joined at ($x, $y) with mass $mass. Total players: ${updatedWorld.players.size}")
+          // Immediately broadcast the updated world to all registered players
+          registeredPlayers.foreach { playerRef =>
+            playerRef ! WorldStateUpdate(updatedWorld)
+          }
           gameWorld(updatedWorld, directions, registeredPlayers)
 
         case PlayerLeft(id) =>
@@ -68,7 +72,7 @@ object GameWorldActor:
           Behaviors.same
 
         case RegisterPlayer(playerId, playerNode) =>
-          context.log.info(s"Registered player node for $playerId")
+          context.log.info(s"📝 Registered player node for $playerId. Total registered: ${registeredPlayers.size + 1}")
           gameWorld(world, directions, registeredPlayers + playerNode)
 
         case UnregisterPlayer(playerId) =>

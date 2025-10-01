@@ -2,6 +2,8 @@ package it.unibo.agar.controller
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorSystem, Behavior}
+import akka.actor.typed.receptionist.{Receptionist, ServiceKey}
+import akka.cluster.typed.{Cluster, SelfUp, Subscribe}
 import it.unibo.agar.model.*
 import it.unibo.agar.view.GlobalView
 import scala.swing.Swing.onEDT
@@ -19,11 +21,14 @@ object SeedNode:
 
   sealed trait SeedCommand
   case object Initialize extends SeedCommand
+  case object ClusterReady extends SeedCommand
+
+  val GameWorldKey: ServiceKey[GameMessage] = ServiceKey[GameMessage]("game-world-manager")
 
   def main(args: Array[String]): Unit =
     val width = 1000
     val height = 1000
-    val numPlayers = 4
+    val numPlayers = 0  // ← Cambiato da 4 a 0: nessun player dummy
     val numFoods = 100
 
     println("=" * 60)
@@ -49,6 +54,11 @@ object SeedNode:
     Behaviors.setup { context =>
       context.log.info("🌱 Initializing Seed Node")
 
+      // Subscribe to cluster events
+      val cluster = Cluster(context.system)
+      val clusterEventAdapter = context.messageAdapter[SelfUp](_ => ClusterReady)
+      cluster.subscriptions ! Subscribe(clusterEventAdapter, classOf[SelfUp])
+
       // Initialize world
       val initialPlayers = GameInitializer.initialPlayers(numPlayers, width, height)
       val initialFoods = GameInitializer.initialFoods(numFoods, width, height)
@@ -60,34 +70,58 @@ object SeedNode:
         "game-world-manager"
       )
 
-      // Create FoodManager
-      val foodManager = context.spawn(
-        FoodManagerActor(gameWorld, width, height),
-        "food-manager"
-      )
+      // Wait for cluster to be ready before registering
+      waitingForCluster(gameWorld, width, height)
+    }
 
-      // Create GlobalView manager
-      val globalManager = new DistributedGameStateManager(gameWorld)(context.system)
+  private def waitingForCluster(
+      gameWorld: akka.actor.typed.ActorRef[GameMessage],
+      width: Int,
+      height: Int
+  ): Behavior[SeedCommand] =
+    Behaviors.receive { (context, message) =>
+      message match
+        case ClusterReady =>
+          context.log.info("✅ Cluster is ready, registering GameWorld")
 
-      // Set up game tick timer
-      val timer = new Timer()
-      val task: TimerTask = new TimerTask:
-        override def run(): Unit =
-          gameWorld ! Tick
-          onEDT(Window.getWindows.foreach(_.repaint()))
+          // ⭐ IMPORTANT: Register GameWorld in the Receptionist so PlayerNodes can find it
+          context.system.receptionist ! Receptionist.Register(GameWorldKey, gameWorld)
+          context.log.info("📡 GameWorld registered in Receptionist")
 
-      timer.scheduleAtFixedRate(task, 0, 30) // 30ms tick
+          // Create FoodManager
+          val foodManager = context.spawn(
+            FoodManagerActor(gameWorld, width, height),
+            "food-manager"
+          )
 
-      // Open GlobalView on EDT
-      onEDT {
-        val globalView = new GlobalView(globalManager)
-        globalView.visible = true
-      }
+          // Create GlobalView manager
+          val globalManager = new DistributedGameStateManager(gameWorld)(context.system)
 
-      context.log.info("✅ Seed Node initialized successfully")
+          // Set up game tick timer
+          val timer = new Timer()
+          val task: TimerTask = new TimerTask:
+            override def run(): Unit =
+              gameWorld ! Tick
+              onEDT(Window.getWindows.foreach(_.repaint()))
 
-      Behaviors.receiveMessage { msg =>
-        context.log.info(s"Seed node received: $msg")
-        Behaviors.same
-      }
+          timer.scheduleAtFixedRate(task, 0, 30) // 30ms tick
+
+          // Open GlobalView on EDT
+          onEDT {
+            val globalView = new GlobalView(globalManager)
+            globalView.visible = true
+          }
+
+          context.log.info("✅ Seed Node initialized successfully")
+
+          running()
+
+        case other =>
+          context.log.debug(s"Waiting for cluster, ignoring: $other")
+          Behaviors.same
+    }
+
+  private def running(): Behavior[SeedCommand] =
+    Behaviors.receiveMessage { msg =>
+      Behaviors.same
     }

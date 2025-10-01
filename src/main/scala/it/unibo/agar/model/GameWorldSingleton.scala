@@ -1,7 +1,7 @@
 package it.unibo.agar.model
 
 import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
 import akka.cluster.typed.{ClusterSingleton, SingletonActor}
 
 /**

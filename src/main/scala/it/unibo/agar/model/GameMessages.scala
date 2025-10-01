@@ -1,10 +1,9 @@
 package it.unibo.agar.model
 
 import akka.actor.typed.ActorRef
-import it.unibo.agar.Message
 
 /** Messages for the distributed game system */
-sealed trait GameMessage extends Message
+sealed trait GameMessage
 
 /** Message to move a player in a specific direction */
 case class MovePlayer(id: String, dx: Double, dy: Double) extends GameMessage
@@ -31,7 +30,7 @@ case class RemoveFood(foodIds: Seq[String]) extends GameMessage
 case class CheckGameEnd(replyTo: ActorRef[GameEndResult]) extends GameMessage
 
 /** Response for game end check */
-sealed trait GameEndResult extends Message
+sealed trait GameEndResult
 case object GameContinues extends GameEndResult
 case class GameEnded(winnerId: String, finalMass: Double) extends GameEndResult
 
@@ -47,7 +46,7 @@ case class UnregisterPlayer(playerId: String) extends GameMessage
 // ============= Player Actor Specific Messages =============
 
 /** Messages specific to PlayerActor */
-sealed trait PlayerMessage extends Message
+sealed trait PlayerMessage
 
 /** Message from UI when mouse moves (for player movement) */
 case class MouseMoved(x: Double, y: Double) extends PlayerMessage

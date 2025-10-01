@@ -59,9 +59,11 @@ object PlayerActor:
           // Generate random starting position
           val startX = Random.nextInt(1000).toDouble
           val startY = Random.nextInt(1000).toDouble
+          val startMass = 120.0
 
           // Tell GameWorldActor that this player joined
-          gameWorldActor ! PlayerJoined(playerId, startX, startY)
+          context.log.info(s"Sending PlayerJoined($playerId, $startX, $startY, $startMass) to GameWorld")
+          gameWorldActor ! PlayerJoined(playerId, startX, startY, startMass)
 
           active(playerId, gameWorldActor, startX, startY)
 

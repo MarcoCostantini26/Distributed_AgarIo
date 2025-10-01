@@ -7,7 +7,7 @@ import scala.concurrent.duration._
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Distributed implementation of GameStateManager that communicates
+ * Distributed implementation of game state manager that communicates
  * with the GameWorldActor using Akka messaging.
  *
  * This version uses a cached world state updated asynchronously
@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class DistributedGameStateManager(
     gameWorldActor: ActorRef[GameMessage]
-)(implicit system: ActorSystem[_]) extends GameStateManager:
+)(implicit system: ActorSystem[_]):
 
   implicit val timeout: Timeout = 3.seconds
   implicit val scheduler: akka.actor.typed.Scheduler = system.scheduler
