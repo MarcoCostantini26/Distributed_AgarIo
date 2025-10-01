@@ -5,10 +5,13 @@ import it.unibo.agar.model.GameStateManager
 import java.awt.Graphics2D
 import scala.swing.*
 
-class LocalView(manager: GameStateManager, playerId: String) extends MainFrame:
+class LocalView(manager: GameStateManager, playerId: String) extends Frame:
 
   title = s"Agar.io - Local View ($playerId)"
   preferredSize = new Dimension(400, 400)
+
+  // IMPORTANTE: Non chiudere l'applicazione quando chiudo questa finestra
+  peer.setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE)
 
   contents = new Panel:
     listenTo(keys, mouse.moves)
