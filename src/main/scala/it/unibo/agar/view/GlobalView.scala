@@ -11,7 +11,6 @@ class GlobalView(manager: DistributedGameStateManager) extends MainFrame:
   title = "Agar.io - Global View (Main Window)"
   preferredSize = new Dimension(800, 800)
 
-  // IMPORTANTE: Solo questa finestra chiude l'applicazione
   peer.setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE)
 
   contents = new Panel:

@@ -34,3 +34,7 @@ but it introduces a single point of failure and may limit scalability.
 Justify each architectural choice by explaining how it impacts the system's reliability, responsiveness, and maintainability. 
 Strive for a solution where actors collaborate to maintain a consistent world view without unnecessary centralization, 
 leveraging Akka's distributed features to balance load and resilience across the cluster.
+
+## How to start our application
+- **Seed Node (Server)**: `.\start-seed.bat` => It'll open a `GlobalView`
+- **Player Node (Client)**: `.\start-player.bat <PLAYER_NAME> <PORT>` => It'll open a `LocalView`

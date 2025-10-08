@@ -4,10 +4,6 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import scala.util.Random
 
-/**
- * The main actor that manages the distributed game world state.
- * This actor will run as a Cluster Singleton to ensure consistency.
- */
 object GameWorldActor:
 
   private val GAME_END_MASS = 1000.0
@@ -18,8 +14,8 @@ object GameWorldActor:
 
   private def gameWorld(
       world: World,
-      directions: Map[String, (Double, Double)], // Player movement directions
-      registeredPlayers: Set[ActorRef[GameMessage]] // Registered player nodes for broadcasting
+      directions: Map[String, (Double, Double)], 
+      registeredPlayers: Set[ActorRef[GameMessage]] 
   ): Behavior[GameMessage] =
     Behaviors.receive { (context, message) =>
       message match
@@ -33,7 +29,6 @@ object GameWorldActor:
 
         case Tick =>
           val updatedWorld = processTick(world, directions)
-          // Broadcast world state to all registered players
           registeredPlayers.foreach { playerRef =>
             playerRef ! WorldStateUpdate(updatedWorld)
           }
@@ -42,8 +37,7 @@ object GameWorldActor:
         case PlayerJoined(id, x, y, mass) =>
           val newPlayer = Player(id, x, y, mass)
           val updatedWorld = world.copy(players = world.players :+ newPlayer)
-          context.log.info(s"✅ Player $id joined at ($x, $y) with mass $mass. Total players: ${updatedWorld.players.size}")
-          // Immediately broadcast the updated world to all registered players
+          context.log.info(s"Player $id joined at ($x, $y) with mass $mass. Total players: ${updatedWorld.players.size}")
           registeredPlayers.foreach { playerRef =>
             playerRef ! WorldStateUpdate(updatedWorld)
           }
@@ -63,34 +57,18 @@ object GameWorldActor:
           val updatedWorld = world.copy(foods = world.foods.filterNot(f => foodIds.contains(f.id)))
           gameWorld(updatedWorld, directions, registeredPlayers)
 
-        case CheckGameEnd(replyTo) =>
-          world.players.find(_.mass >= GAME_END_MASS) match
-            case Some(winner) =>
-              replyTo ! GameEnded(winner.id, winner.mass)
-            case None =>
-              replyTo ! GameContinues
-          Behaviors.same
-
         case RegisterPlayer(playerId, playerNode) =>
-          context.log.info(s"📝 Registered player node for $playerId. Total registered: ${registeredPlayers.size + 1}")
+          context.log.info(s"Registered player node for $playerId. Total registered: ${registeredPlayers.size + 1}")
           gameWorld(world, directions, registeredPlayers + playerNode)
 
         case UnregisterPlayer(playerId) =>
-          // Remove player from registered set
-          // Note: We need to track playerId -> ActorRef mapping
           context.log.info(s"Unregistered player node for $playerId")
-          // For now we don't remove from set as we don't have the mapping
-          // In production, use Map[String, ActorRef[GameMessage]] instead
           Behaviors.same
 
         case WorldStateUpdate(_) =>
-          // This actor is the source of truth, ignore updates
           Behaviors.same
     }
 
-  /**
-   * Process a single game tick - move players and handle eating logic
-   */
   private def processTick(world: World, directions: Map[String, (Double, Double)]): World =
     directions.foldLeft(world) { case (currentWorld, (playerId, (dx, dy))) =>
       currentWorld.playerById(playerId) match
@@ -98,41 +76,29 @@ object GameWorldActor:
           val movedPlayer = updatePlayerPosition(player, dx, dy, currentWorld.width, currentWorld.height)
           updateWorldAfterMovement(movedPlayer, currentWorld)
         case None =>
-          // Player not found, ignore movement
           currentWorld
     }
 
-  /**
-   * Update player position with boundary constraints
-   */
   private def updatePlayerPosition(player: Player, dx: Double, dy: Double, worldWidth: Int, worldHeight: Int): Player =
     val newX = (player.x + dx * SPEED).max(0).min(worldWidth)
     val newY = (player.y + dy * SPEED).max(0).min(worldHeight)
     player.copy(x = newX, y = newY)
 
-  /**
-   * Update world after a player movement - handle eating logic
-   */
   private def updateWorldAfterMovement(player: Player, world: World): World =
-    // Find food that can be eaten
     val foodEaten = world.foods.filter(food => EatingManager.canEatFood(player, food))
     val playerAfterEatingFood = foodEaten.foldLeft(player)((p, food) => p.grow(food))
 
-    // Find players that can be eaten
     val playersEaten = world
       .playersExcludingSelf(player)
       .filter(otherPlayer => EatingManager.canEatPlayer(playerAfterEatingFood, otherPlayer))
     val playerAfterEatingPlayers = playersEaten.foldLeft(playerAfterEatingFood)((p, other) => p.grow(other))
 
-    // Update world with new state
     world
       .updatePlayer(playerAfterEatingPlayers)
       .removePlayers(playersEaten)
       .removeFoods(foodEaten)
 
-  /**
-   * Generate random food for the world
-   */
+
   def generateRandomFood(worldWidth: Int, worldHeight: Int, count: Int = 1): Seq[Food] =
     (1 to count).map { i =>
       Food(

@@ -33,7 +33,6 @@ object AgarViewUtils:
     def toScreenLabel(x: Double, y: Double): (Int, Int) =
       ((x - offsetX - playerLabelOffsetX).toInt, (y - offsetY - playerLabelOffsetY).toInt)
 
-    // Draw foods
     g.setColor(Color.green)
     world.foods.foreach: food =>
       val radius = food.radius.toInt
@@ -41,7 +40,6 @@ object AgarViewUtils:
       val (foodX, foodY) = toScreenCenter(food.x, food.y, radius)
       g.fillOval(foodX, foodY, diameter, diameter)
 
-    // Draw players
     world.players.foreach: player =>
       val radius = player.radius.toInt
       val diameter = radius * 2
